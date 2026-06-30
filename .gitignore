@@ -1,7 +1,6 @@
 /.env
 /.venv
 /config.json
-/config.py
 /docs
 /internal
 /__pycache__
