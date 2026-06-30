@@ -4,6 +4,16 @@ A local, Ollama-powered AI agent workbench with a browser UI, pluggable tools, d
 
 This project is built for local-first experimentation. The model runs through Ollama, tools are Python packages discovered from `tools/*/manifest.json`, persistent state lives in SQLite under `internal/`, and the frontend is a lightweight Flask-served desktop-style interface.
 
+## Screenshots
+
+### Desktop Workbench
+
+![Kesehet AI Agent desktop workbench](assets/screenshots/desktop-workbench.png)
+
+### Compact Workbench
+
+![Kesehet AI Agent compact workbench](assets/screenshots/compact-workbench.png)
+
 ## What It Does
 
 - Plans a user request into action and validation tasks.
@@ -454,4 +464,13 @@ That prompt exercises planning, file writing, file reading, validation, and summ
 
 ## License
 
-No license file is currently included. Add one before publishing or sharing the project beyond private/internal use.
+This project uses a custom non-commercial private-use license. It is free for
+private, personal, educational, and internal non-commercial use with visible
+credit to the original GitHub repository:
+
+```text
+https://github.com/Kesehet/kesehet-ai-agent
+```
+
+Commercial use is not permitted without prior written permission from the
+copyright holder. See [LICENSE](LICENSE) for the full terms.
