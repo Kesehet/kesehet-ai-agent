@@ -1,51 +1,14 @@
-import json
-from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-
-INTERNAL_ROOT = Path(__file__).resolve().parents[2] / "internal"
-SCHEDULE_PATH = INTERNAL_ROOT / "calendar" / "scheduled.json"
-
-
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _ensure_schedule_file() -> None:
-    SCHEDULE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    if not SCHEDULE_PATH.exists():
-        SCHEDULE_PATH.write_text("[]", encoding="utf-8")
-
-
-def _read_scheduled() -> list[dict[str, Any]]:
-    _ensure_schedule_file()
-    try:
-        scheduled = json.loads(SCHEDULE_PATH.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError("Scheduled calendar file contains invalid JSON.") from exc
-
-    if not isinstance(scheduled, list):
-        raise ValueError("Scheduled calendar file must contain a JSON list.")
-
-    return scheduled
-
-
-def _write_scheduled(scheduled: list[dict[str, Any]]) -> None:
-    _ensure_schedule_file()
-    SCHEDULE_PATH.write_text(
-        json.dumps(scheduled, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-
-
-def _find_scheduled_index(scheduled: list[dict[str, Any]], schedule_id: str) -> int:
-    for index, item in enumerate(scheduled):
-        if item.get("id") == schedule_id:
-            return index
-
-    raise ValueError("Scheduled item does not exist.")
+from core.db import (
+    calculate_next_run,
+    connect,
+    dumps,
+    init_db,
+    row_to_schedule,
+    utc_now_text,
+)
 
 
 def _normalize_tool_call(tool_call: dict[str, Any]) -> dict[str, Any]:
@@ -75,6 +38,18 @@ def _normalize_tool_calls(tool_calls: list[dict[str, Any]]) -> list[dict[str, An
     return [_normalize_tool_call(tool_call) for tool_call in tool_calls]
 
 
+def _get_schedule(schedule_id: str) -> dict[str, Any]:
+    init_db()
+    with connect() as db:
+        row = db.execute(
+            "SELECT * FROM schedules WHERE id = ?",
+            (schedule_id,),
+        ).fetchone()
+    if row is None:
+        raise ValueError("Scheduled item does not exist.")
+    return row_to_schedule(row)
+
+
 def schedule_tool(
     tool_calls: list[dict[str, Any]],
     run_at: str | None = None,
@@ -87,37 +62,56 @@ def schedule_tool(
         raise ValueError("Either run_at or repeat is required.")
 
     normalized_tool_calls = _normalize_tool_calls(tool_calls)
-    now = _utc_now()
-    item = {
-        "id": uuid4().hex,
-        "tool_calls": normalized_tool_calls,
-        "run_at": run_at,
-        "repeat": repeat,
-        "timezone": timezone_name,
-        "enabled": enabled,
-        "notes": notes,
-        "created_at": now,
-        "updated_at": now,
-        "last_run_at": None,
-    }
+    now = utc_now_text()
+    schedule_id = uuid4().hex
+    next_run_at = calculate_next_run(run_at, repeat, timezone_name)
 
-    scheduled = _read_scheduled()
-    scheduled.append(item)
-    _write_scheduled(scheduled)
-    return item
+    init_db()
+    with connect() as db:
+        db.execute(
+            """
+            INSERT INTO schedules (
+                id, tool_calls, run_at, repeat, timezone_name, enabled,
+                notes, created_at, updated_at, last_run_at, next_run_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+            """,
+            (
+                schedule_id,
+                dumps(normalized_tool_calls),
+                run_at,
+                repeat,
+                timezone_name,
+                1 if enabled else 0,
+                notes,
+                now,
+                now,
+                next_run_at,
+            ),
+        )
+
+    return get_scheduled_tool(schedule_id)
 
 
 def list_scheduled_tools(include_disabled: bool = True) -> list[dict[str, Any]]:
-    scheduled = _read_scheduled()
-    if include_disabled:
-        return scheduled
-
-    return [item for item in scheduled if item.get("enabled", True)]
+    init_db()
+    with connect() as db:
+        if include_disabled:
+            rows = db.execute(
+                "SELECT * FROM schedules ORDER BY enabled DESC, next_run_at ASC"
+            ).fetchall()
+        else:
+            rows = db.execute(
+                """
+                SELECT * FROM schedules
+                WHERE enabled = 1
+                ORDER BY next_run_at ASC
+                """
+            ).fetchall()
+    return [row_to_schedule(row) for row in rows]
 
 
 def get_scheduled_tool(schedule_id: str) -> dict[str, Any]:
-    scheduled = _read_scheduled()
-    return scheduled[_find_scheduled_index(scheduled, schedule_id)]
+    return _get_schedule(schedule_id)
 
 
 def update_scheduled_tool(
@@ -129,36 +123,55 @@ def update_scheduled_tool(
     enabled: bool | None = None,
     notes: str | None = None,
 ) -> dict[str, Any]:
-    scheduled = _read_scheduled()
-    index = _find_scheduled_index(scheduled, schedule_id)
-    item = dict(scheduled[index])
+    current = _get_schedule(schedule_id)
 
-    updates = {
-        "run_at": run_at,
-        "repeat": repeat,
-        "timezone": timezone_name,
-        "enabled": enabled,
-        "notes": notes,
-    }
-    for key, value in updates.items():
-        if value is not None:
-            item[key] = value
+    next_tool_calls = (
+        _normalize_tool_calls(tool_calls)
+        if tool_calls is not None
+        else current["tool_calls"]
+    )
+    next_run_value = run_at if run_at is not None else current["run_at"]
+    next_repeat = repeat if repeat is not None else current["repeat"]
+    next_timezone = (
+        timezone_name
+        if timezone_name is not None
+        else current["timezone_name"]
+    )
+    next_enabled = enabled if enabled is not None else current["enabled"]
+    next_notes = notes if notes is not None else current["notes"]
 
-    if tool_calls is not None:
-        item["tool_calls"] = _normalize_tool_calls(tool_calls)
-
-    if not item.get("run_at") and not item.get("repeat"):
+    if not next_run_value and not next_repeat:
         raise ValueError("Either run_at or repeat is required.")
 
-    item["updated_at"] = _utc_now()
-    scheduled[index] = item
-    _write_scheduled(scheduled)
-    return item
+    next_run_at = calculate_next_run(next_run_value, next_repeat, next_timezone)
+    now = utc_now_text()
+
+    with connect() as db:
+        db.execute(
+            """
+            UPDATE schedules
+            SET tool_calls = ?, run_at = ?, repeat = ?, timezone_name = ?,
+                enabled = ?, notes = ?, updated_at = ?, next_run_at = ?
+            WHERE id = ?
+            """,
+            (
+                dumps(next_tool_calls),
+                next_run_value,
+                next_repeat,
+                next_timezone,
+                1 if next_enabled else 0,
+                next_notes,
+                now,
+                next_run_at,
+                schedule_id,
+            ),
+        )
+
+    return get_scheduled_tool(schedule_id)
 
 
 def delete_scheduled_tool(schedule_id: str) -> dict[str, str]:
-    scheduled = _read_scheduled()
-    index = _find_scheduled_index(scheduled, schedule_id)
-    deleted = scheduled.pop(index)
-    _write_scheduled(scheduled)
-    return {"deleted": deleted["id"]}
+    _get_schedule(schedule_id)
+    with connect() as db:
+        db.execute("DELETE FROM schedules WHERE id = ?", (schedule_id,))
+    return {"deleted": schedule_id}

@@ -3,6 +3,8 @@ from pathlib import Path
 from flask import Flask, abort, jsonify, render_template, send_from_directory
 from ai import ai_response, select_tasks_for_prompt, get_starter_context, select_tools_for_prompt
 from helper import get_request_json, response_messages, response_text
+from core.db import init_db
+from core.scheduler_runner import get_scheduler_status, start_scheduler_runner
 
 
 INTERNAL_ROOT = Path(__file__).resolve().parent / "internal"
@@ -10,6 +12,16 @@ INTERNAL_ROOT = Path(__file__).resolve().parent / "internal"
 
 # Basic Flask application
 app = Flask(__name__, static_folder="static", static_url_path="/static")
+init_db()
+_services_started = False
+
+
+@app.before_request
+def ensure_background_services():
+	global _services_started
+	if not _services_started:
+		start_scheduler_runner()
+		_services_started = True
 
 @app.route('/')
 def index():
@@ -19,6 +31,11 @@ def index():
 @app.route('/heartbeat')
 def heartbeat():
 	return jsonify({"alive": True})
+
+
+@app.route('/scheduler/status')
+def scheduler_status():
+	return jsonify(get_scheduler_status())
 
 
 @app.route('/internal_file/<path:file_path>')

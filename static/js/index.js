@@ -6,11 +6,21 @@
 		const globalStatus = document.getElementById("global-status");
 		const dock = document.getElementById("dock");
 		const errorToast = document.getElementById("error-toast");
+		const schedulerWidget = document.getElementById("scheduler-widget");
+		const schedulerToggle = document.getElementById("scheduler-toggle");
+		const schedulerDot = document.getElementById("scheduler-dot");
+		const schedulerCount = document.getElementById("scheduler-count");
+		const schedulerPanel = document.getElementById("scheduler-panel");
+		const schedulerUpdated = document.getElementById("scheduler-updated");
+		const schedulerRunning = document.getElementById("scheduler-running");
+		const schedulerUpcoming = document.getElementById("scheduler-upcoming");
+		const schedulerRecent = document.getElementById("scheduler-recent");
 		const nodeCanvas = document.getElementById("node-field");
 		const nodeContext = nodeCanvas.getContext("2d");
 
 		const windows = new Map();
 		const HEARTBEAT_INTERVAL_MS = 90000;
+		const SCHEDULER_INTERVAL_MS = 15000;
 		const NODE_PULSE_INTERVAL_MS = 2500;
 		const NODE_NEIGHBOR_INTENSITY = 0.125;
 		const NODE_SECONDARY_INTENSITY = NODE_NEIGHBOR_INTENSITY / 2;
@@ -205,6 +215,108 @@
 
 		function confirmHeartbeat() {
 			pulseRandomNode();
+		}
+
+		function formatScheduleTime(value) {
+			if (!value) return "No next run";
+			const date = new Date(value);
+			if (Number.isNaN(date.getTime())) return value;
+			return date.toLocaleString([], {
+				month: "short",
+				day: "numeric",
+				hour: "2-digit",
+				minute: "2-digit",
+			});
+		}
+
+		function toolLabelFromSchedule(item) {
+			const calls = Array.isArray(item.tool_calls) ? item.tool_calls : [];
+			if (!calls.length) return "No tool calls";
+			const names = calls.map((call) => call.tool_name).filter(Boolean);
+			return names.length > 1 ? `${names[0]} + ${names.length - 1}` : names[0];
+		}
+
+		function renderSchedulerList(container, items, emptyText, renderItem) {
+			container.innerHTML = "";
+			if (!items.length) {
+				const empty = document.createElement("div");
+				empty.className = "scheduler-empty";
+				empty.textContent = emptyText;
+				container.appendChild(empty);
+				return;
+			}
+
+			items.forEach((item) => {
+				const row = document.createElement("div");
+				row.className = "scheduler-row";
+				const rendered = renderItem(item);
+				row.innerHTML = `
+					<div class="scheduler-row-main"></div>
+					<div class="scheduler-row-meta"></div>
+				`;
+				row.querySelector(".scheduler-row-main").textContent = rendered.main;
+				row.querySelector(".scheduler-row-meta").textContent = rendered.meta;
+				container.appendChild(row);
+			});
+		}
+
+		function updateSchedulerStatus(data) {
+			const running = Array.isArray(data.running) ? data.running : [];
+			const scheduled = Array.isArray(data.scheduled) ? data.scheduled : [];
+			const recent = Array.isArray(data.recent) ? data.recent : [];
+			const activeCount = running.length + scheduled.length;
+
+			schedulerCount.textContent = String(activeCount);
+			schedulerWidget.classList.toggle("has-running", running.length > 0);
+			schedulerDot.title = running.length > 0 ? "Scheduler is running jobs" : "Scheduler idle";
+			schedulerUpdated.textContent = `Updated ${formatScheduleTime(data.now)}`;
+
+			renderSchedulerList(
+				schedulerRunning,
+				running,
+				"No running jobs",
+				(item) => ({
+					main: item.tool_name || "Scheduled job",
+					meta: item.status || "queued",
+				}),
+			);
+
+			renderSchedulerList(
+				schedulerUpcoming,
+				scheduled,
+				"No upcoming schedules",
+				(item) => ({
+					main: toolLabelFromSchedule(item),
+					meta: `${formatScheduleTime(item.next_run_at)}${item.repeat ? ` - ${item.repeat}` : ""}`,
+				}),
+			);
+
+			renderSchedulerList(
+				schedulerRecent,
+				recent,
+				"No recent jobs",
+				(item) => ({
+					main: item.tool_name || "Scheduler",
+					meta: `${item.status}${item.finished_at ? ` - ${formatScheduleTime(item.finished_at)}` : ""}`,
+				}),
+			);
+		}
+
+		async function refreshSchedulerStatus() {
+			try {
+				const response = await fetch("/scheduler/status", {
+					cache: "no-store",
+					headers: { "Accept": "application/json" },
+				});
+				if (!response.ok) {
+					throw new Error(`Scheduler failed with status ${response.status}`);
+				}
+				updateSchedulerStatus(await response.json());
+			} catch (error) {
+				schedulerWidget.classList.remove("has-running");
+				schedulerCount.textContent = "!";
+				schedulerUpdated.textContent = "Unavailable";
+			}
 		}
 
 		async function checkHeartbeat() {
@@ -888,6 +1000,15 @@
 			runInitialTask(state);
 		});
 
+		schedulerToggle.addEventListener("click", () => {
+			const nextOpen = schedulerPanel.hidden;
+			schedulerPanel.hidden = !nextOpen;
+			schedulerToggle.setAttribute("aria-expanded", String(nextOpen));
+			if (nextOpen) {
+				refreshSchedulerStatus();
+			}
+		});
+
 		[launcherInput].forEach((input) => {
 			input.addEventListener("keydown", (event) => {
 				if (event.key === "Enter" && !event.shiftKey) {
@@ -923,3 +1044,5 @@
 		nodePulseTimer = window.setInterval(pulseRandomNode, NODE_PULSE_INTERVAL_MS);
 		checkHeartbeat();
 		window.setInterval(checkHeartbeat, HEARTBEAT_INTERVAL_MS);
+		refreshSchedulerStatus();
+		window.setInterval(refreshSchedulerStatus, SCHEDULER_INTERVAL_MS);

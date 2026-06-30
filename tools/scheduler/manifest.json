@@ -7,7 +7,7 @@
       "category": "calendar",
       "function": {
         "name": "schedule_tool",
-        "description": "Save one or more tool calls to the calendar for future execution. This only stores the schedule metadata and does not run the tools.",
+        "description": "Save one or more tool calls to SQLite for future execution by the background scheduler.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -64,7 +64,7 @@
       "category": "calendar",
       "function": {
         "name": "list_scheduled_tools",
-        "description": "List saved calendar tool schedules from internal/calendar/scheduled.json.",
+        "description": "List saved calendar tool schedules from the SQLite scheduler database.",
         "parameters": {
           "type": "object",
           "properties": {

@@ -1,0 +1,161 @@
+{
+  "name": "memory",
+  "module": "tools.memory.main",
+  "tools": [
+    {
+      "type": "function",
+      "category": "memory",
+      "function": {
+        "name": "remember",
+        "description": "Persist a durable memory in the agent SQLite database for later retrieval.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Short title for the memory."
+            },
+            "content": {
+              "type": "string",
+              "description": "Memory body to store."
+            },
+            "tags": {
+              "type": "array",
+              "description": "Optional tags for searching later.",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "title",
+            "content"
+          ]
+        }
+      },
+      "entrypoint": "remember"
+    },
+    {
+      "type": "function",
+      "category": "memory",
+      "function": {
+        "name": "search_memory",
+        "description": "Search durable agent memories stored in SQLite by title, content, or tags.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Search text."
+            },
+            "max_results": {
+              "type": "integer",
+              "description": "Maximum number of memories to return."
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      },
+      "entrypoint": "search_memory"
+    },
+    {
+      "type": "function",
+      "category": "memory",
+      "function": {
+        "name": "list_memories",
+        "description": "List recent durable agent memories from SQLite.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "max_results": {
+              "type": "integer",
+              "description": "Maximum number of memories to return."
+            }
+          },
+          "required": []
+        }
+      },
+      "entrypoint": "list_memories"
+    },
+    {
+      "type": "function",
+      "category": "memory",
+      "function": {
+        "name": "get_memory",
+        "description": "Get one durable agent memory by id.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "memory_id": {
+              "type": "string",
+              "description": "Memory id."
+            }
+          },
+          "required": [
+            "memory_id"
+          ]
+        }
+      },
+      "entrypoint": "get_memory"
+    },
+    {
+      "type": "function",
+      "category": "memory",
+      "function": {
+        "name": "update_memory",
+        "description": "Update an existing durable agent memory. Only provided fields are changed.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "memory_id": {
+              "type": "string",
+              "description": "Memory id."
+            },
+            "title": {
+              "type": "string",
+              "description": "Updated title."
+            },
+            "content": {
+              "type": "string",
+              "description": "Updated content."
+            },
+            "tags": {
+              "type": "array",
+              "description": "Replacement tags.",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "memory_id"
+          ]
+        }
+      },
+      "entrypoint": "update_memory"
+    },
+    {
+      "type": "function",
+      "category": "memory",
+      "function": {
+        "name": "delete_memory",
+        "description": "Delete a durable agent memory by id.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "memory_id": {
+              "type": "string",
+              "description": "Memory id."
+            }
+          },
+          "required": [
+            "memory_id"
+          ]
+        }
+      },
+      "entrypoint": "delete_memory"
+    }
+  ]
+}

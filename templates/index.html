@@ -19,6 +19,33 @@
 
 	<div class="dock" id="dock"></div>
 
+	<section class="scheduler-widget" id="scheduler-widget">
+		<button class="scheduler-toggle" id="scheduler-toggle" type="button" aria-expanded="false">
+			<span class="scheduler-dot" id="scheduler-dot"></span>
+			<span id="scheduler-count">0</span>
+		</button>
+		<div class="scheduler-panel" id="scheduler-panel" hidden>
+			<div class="scheduler-panel-head">
+				<div>
+					<div class="scheduler-title">Scheduler</div>
+					<div class="scheduler-subtitle" id="scheduler-updated">Not loaded</div>
+				</div>
+			</div>
+			<div class="scheduler-section">
+				<div class="scheduler-section-title">Running</div>
+				<div class="scheduler-list" id="scheduler-running"></div>
+			</div>
+			<div class="scheduler-section">
+				<div class="scheduler-section-title">Upcoming</div>
+				<div class="scheduler-list" id="scheduler-upcoming"></div>
+			</div>
+			<div class="scheduler-section">
+				<div class="scheduler-section-title">Recent</div>
+				<div class="scheduler-list" id="scheduler-recent"></div>
+			</div>
+		</div>
+	</section>
+
 	<form class="launcher" id="launcher-form">
 		<textarea class="textbox" id="launcher-input" rows="1" placeholder="Start a new task..."></textarea>
 		<button class="send-button" id="launcher-button" type="submit" title="Start task" aria-label="Start task">GO</button>

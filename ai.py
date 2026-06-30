@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 from config import get_config
 from tools.main import ALL_TOOLS, get_tool_summaries, parse_tool_names
+from tools.memory.main import search_memory
 
 load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
 
@@ -70,6 +71,8 @@ def select_tools_for_prompt(
         - If the user asks to create, diagnose, fix, rebuild, or repair AI tools, include the matching tool_development tool.
         - If the user asks to add, update, list, view, or delete CCTV/property camera settings, include the matching camera config tool.
         - If the user asks to find or track people in property camera footage, include find_person.
+        - If the user asks you to remember, recall, store knowledge, or use persistent memory, include memory tools.
+        - If the user asks to schedule, list, update, or delete future tool runs, include scheduler tools.
 
         Return only valid JSON in this exact format:
         ["tool_name_1", "tool_name_2"]
@@ -489,17 +492,41 @@ def ollama_call(
     return content
 
 
+def _memory_context(prompt: str, limit: int = 5) -> str:
+    try:
+        memories = search_memory(prompt, max_results=limit)
+    except Exception:
+        memories = []
+
+    if not memories:
+        return ""
+
+    lines = ["Relevant durable memories from SQLite:"]
+    for memory in memories:
+        tags = ", ".join(memory.get("tags") or [])
+        suffix = f" [{tags}]" if tags else ""
+        lines.append(
+            f"- {memory['title']}{suffix}: {memory['content']}"
+        )
+    return "\n".join(lines)
+
+
 def get_starter_context(prompt):
+    memory_context = _memory_context(prompt)
+    system_content = (
+        get_config("personality", "You are a helpful assistant that provides accurate and concise answers to user questions.") + " "
+        "You are working through a multi-step user request. "
+        "Use the conversation history, previous task outputs, and "
+        "tool results as context for each next step."
+        "Please use tools as and when necessary to complete the user request."
+    )
+    if memory_context:
+        system_content = f"{system_content}\n\n{memory_context}"
+
     return [
         {
             "role": "system",
-            "content": (
-                get_config("personality", "You are a helpful assistant that provides accurate and concise answers to user questions.") + " "
-                "You are working through a multi-step user request. "
-                "Use the conversation history, previous task outputs, and "
-                "tool results as context for each next step."
-                "Please use tools as and when necessary to complete the user request."
-            ),
+            "content": system_content,
         },
         {
             "role": "user",
