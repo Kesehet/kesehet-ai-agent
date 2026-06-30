@@ -1,0 +1,41 @@
+{
+  "name": "tool_helper",
+  "module": "tools.tool_helper.main",
+  "tools": [
+    {
+      "type": "function",
+      "category": "tools",
+      "function": {
+        "name": "get_tool",
+        "description": "Get details of a specific tool by its name.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "tool_name": {
+              "type": "string",
+              "description": "The name of the tool to retrieve."
+            }
+          },
+          "required": [
+            "tool_name"
+          ]
+        }
+      },
+      "entrypoint": "get_tool"
+    },
+    {
+      "type": "function",
+      "category": "tools",
+      "function": {
+        "name": "get_all_tool_details",
+        "description": "Get a list of all available tools and their descriptions.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      },
+      "entrypoint": "get_all_tool_details"
+    }
+  ]
+}

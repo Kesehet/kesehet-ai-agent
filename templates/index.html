@@ -1,0 +1,32 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Kesehet AI Agent</title>
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+</head>
+<body>
+	<canvas class="node-field" id="node-field" aria-hidden="true"></canvas>
+	<div class="top-strip">
+		<div class="brand">Kesehet AI Agent</div>
+		<div class="status" id="global-status">Idle</div>
+	</div>
+
+	<main class="desktop" id="desktop">
+		<div class="empty-hint" id="empty-hint">Start a new task from the command box below. Each task opens as its own workspace window.</div>
+	</main>
+
+	<div class="dock" id="dock"></div>
+
+	<form class="launcher" id="launcher-form">
+		<textarea class="textbox" id="launcher-input" rows="1" placeholder="Start a new task..."></textarea>
+		<button class="send-button" id="launcher-button" type="submit" title="Start task" aria-label="Start task">GO</button>
+	</form>
+
+	<div class="error-toast" id="error-toast"></div>
+
+	<script src="{{ url_for('static', filename='js/index.js') }}" defer></script>
+</body>
+</html>
+

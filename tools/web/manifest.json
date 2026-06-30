@@ -1,0 +1,31 @@
+{
+  "name": "web",
+  "module": "tools.web.main",
+  "tools": [
+    {
+      "type": "function",
+      "category": "web",
+      "function": {
+        "name": "web_search",
+        "description": "Search the web, visit each result, and extract clean AI-usable page content.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Search query."
+            },
+            "max_results": {
+              "type": "integer",
+              "description": "Maximum number of search results to read."
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      },
+      "entrypoint": "web_search"
+    }
+  ]
+}

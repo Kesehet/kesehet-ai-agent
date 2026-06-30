@@ -1,0 +1,58 @@
+{
+  "name": "maths",
+  "module": "tools.maths.main",
+  "tools": [
+    {
+      "type": "function",
+      "category": "maths",
+      "function": {
+        "name": "add_numbers",
+        "description": "Add two integers together.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "integer",
+              "description": "First number"
+            },
+            "b": {
+              "type": "integer",
+              "description": "Second number"
+            }
+          },
+          "required": [
+            "a",
+            "b"
+          ]
+        }
+      },
+      "entrypoint": "add_numbers"
+    },
+    {
+      "type": "function",
+      "category": "maths",
+      "function": {
+        "name": "subtract_numbers",
+        "description": "Subtract one integer from another.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "integer",
+              "description": "First number"
+            },
+            "b": {
+              "type": "integer",
+              "description": "Second number"
+            }
+          },
+          "required": [
+            "a",
+            "b"
+          ]
+        }
+      },
+      "entrypoint": "subtract_numbers"
+    }
+  ]
+}

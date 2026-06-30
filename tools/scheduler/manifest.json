@@ -1,0 +1,185 @@
+{
+  "name": "scheduler",
+  "module": "tools.scheduler.main",
+  "tools": [
+    {
+      "type": "function",
+      "category": "calendar",
+      "function": {
+        "name": "schedule_tool",
+        "description": "Save one or more tool calls to the calendar for future execution. This only stores the schedule metadata and does not run the tools.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "tool_calls": {
+              "type": "array",
+              "description": "Ordered tool calls to run later as one scheduled item.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "tool_name": {
+                    "type": "string",
+                    "description": "Name of the tool that should run later."
+                  },
+                  "tool_parameters": {
+                    "type": "object",
+                    "description": "Parameters to pass to the tool when it runs."
+                  }
+                },
+                "required": [
+                  "tool_name"
+                ]
+              }
+            },
+            "run_at": {
+              "type": "string",
+              "description": "Specific date and time to run, preferably ISO 8601 such as 2026-06-29T00:00:00+05:30."
+            },
+            "repeat": {
+              "type": "string",
+              "description": "Optional recurrence text, such as daily, weekly, every day at 00:00, or cron-style text."
+            },
+            "timezone_name": {
+              "type": "string",
+              "description": "Timezone for interpreting the schedule, such as Asia/Calcutta."
+            },
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether this scheduled item is active."
+            },
+            "notes": {
+              "type": "string",
+              "description": "Optional human-readable note about this schedule."
+            }
+          },
+          "required": [
+            "tool_calls"
+          ]
+        }
+      },
+      "entrypoint": "schedule_tool"
+    },
+    {
+      "type": "function",
+      "category": "calendar",
+      "function": {
+        "name": "list_scheduled_tools",
+        "description": "List saved calendar tool schedules from internal/calendar/scheduled.json.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "include_disabled": {
+              "type": "boolean",
+              "description": "Whether to include disabled scheduled items."
+            }
+          },
+          "required": []
+        }
+      },
+      "entrypoint": "list_scheduled_tools"
+    },
+    {
+      "type": "function",
+      "category": "calendar",
+      "function": {
+        "name": "get_scheduled_tool",
+        "description": "Get one saved calendar tool schedule by its schedule id.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "schedule_id": {
+              "type": "string",
+              "description": "ID of the scheduled item."
+            }
+          },
+          "required": [
+            "schedule_id"
+          ]
+        }
+      },
+      "entrypoint": "get_scheduled_tool"
+    },
+    {
+      "type": "function",
+      "category": "calendar",
+      "function": {
+        "name": "update_scheduled_tool",
+        "description": "Update a saved calendar tool schedule. Only provided fields are changed.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "schedule_id": {
+              "type": "string",
+              "description": "ID of the scheduled item to update."
+            },
+            "tool_calls": {
+              "type": "array",
+              "description": "Replacement ordered tool calls for this scheduled item.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "tool_name": {
+                    "type": "string",
+                    "description": "Name of the tool that should run later."
+                  },
+                  "tool_parameters": {
+                    "type": "object",
+                    "description": "Parameters to pass to the tool when it runs."
+                  }
+                },
+                "required": [
+                  "tool_name"
+                ]
+              }
+            },
+            "run_at": {
+              "type": "string",
+              "description": "Updated specific run date and time."
+            },
+            "repeat": {
+              "type": "string",
+              "description": "Updated recurrence text."
+            },
+            "timezone_name": {
+              "type": "string",
+              "description": "Updated timezone name."
+            },
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether this scheduled item is active."
+            },
+            "notes": {
+              "type": "string",
+              "description": "Updated human-readable note."
+            }
+          },
+          "required": [
+            "schedule_id"
+          ]
+        }
+      },
+      "entrypoint": "update_scheduled_tool"
+    },
+    {
+      "type": "function",
+      "category": "calendar",
+      "function": {
+        "name": "delete_scheduled_tool",
+        "description": "Delete a saved calendar tool schedule by its schedule id.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "schedule_id": {
+              "type": "string",
+              "description": "ID of the scheduled item to delete."
+            }
+          },
+          "required": [
+            "schedule_id"
+          ]
+        }
+      },
+      "entrypoint": "delete_scheduled_tool"
+    }
+  ]
+}

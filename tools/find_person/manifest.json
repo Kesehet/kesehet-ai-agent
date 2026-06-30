@@ -1,0 +1,225 @@
+{
+  "name": "find_person",
+  "module": "tools.find_person.main",
+  "tools": [
+    {
+      "type": "function",
+      "category": "surveillance",
+      "function": {
+        "name": "list_camera_configs",
+        "description": "List saved property camera configs. Passwords are never returned.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "include_disabled": {
+              "type": "boolean",
+              "description": "Whether to include disabled camera configs."
+            }
+          },
+          "required": []
+        }
+      },
+      "entrypoint": "list_camera_configs"
+    },
+    {
+      "type": "function",
+      "category": "surveillance",
+      "function": {
+        "name": "get_camera_config",
+        "description": "Get one saved property camera config by camera_id. Password is never returned.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "camera_id": {
+              "type": "string",
+              "description": "Camera ID to read."
+            }
+          },
+          "required": [
+            "camera_id"
+          ]
+        }
+      },
+      "entrypoint": "get_camera_config"
+    },
+    {
+      "type": "function",
+      "category": "surveillance",
+      "function": {
+        "name": "upsert_camera_config",
+        "description": "Create or update a property camera config for find_person. Use this to save IP address, username, password, RTSP path, or local test footage paths. Password can be updated but is never returned.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "camera_id": {
+              "type": "string",
+              "description": "Stable camera ID, such as gate_01."
+            },
+            "name": {
+              "type": "string",
+              "description": "Human readable camera name."
+            },
+            "ip": {
+              "type": "string",
+              "description": "Camera or NVR IP address."
+            },
+            "port": {
+              "type": "integer",
+              "description": "Camera RTSP/ONVIF port."
+            },
+            "username": {
+              "type": "string",
+              "description": "Camera login username."
+            },
+            "password": {
+              "type": "string",
+              "description": "Camera login password to save or update."
+            },
+            "recording_source": {
+              "type": "string",
+              "description": "Source type, such as rtsp, onvif, or local."
+            },
+            "rtsp_url": {
+              "type": "string",
+              "description": "Full RTSP URL, if known."
+            },
+            "rtsp_path": {
+              "type": "string",
+              "description": "RTSP path after host:port, such as Streaming/Channels/101."
+            },
+            "playback_uri": {
+              "type": "string",
+              "description": "Playback URI from NVR/camera if known."
+            },
+            "onvif_port": {
+              "type": "integer",
+              "description": "ONVIF device service port, such as 2020 for discovered Tapo cameras."
+            },
+            "nvr_host": {
+              "type": "string",
+              "description": "NVR IP/host for recorded playback, such as 10.0.0.70."
+            },
+            "nvr_port": {
+              "type": "integer",
+              "description": "NVR RTSP port for playback, usually 554."
+            },
+            "nvr_username": {
+              "type": "string",
+              "description": "NVR username for recorded playback."
+            },
+            "nvr_password": {
+              "type": "string",
+              "description": "NVR password for recorded playback. It is saved but never returned."
+            },
+            "nvr_channel": {
+              "type": "integer",
+              "description": "NVR channel number for this camera."
+            },
+            "nvr_stream": {
+              "type": "integer",
+              "description": "NVR stream number for playback, usually 1."
+            },
+            "local_path": {
+              "type": "string",
+              "description": "Local exported video path, preferably relative to internal/."
+            },
+            "allow_rtsp_fallback": {
+              "type": "boolean",
+              "description": "Whether find_person may build/use an RTSP URL from IP credentials."
+            },
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether this camera should be used by default."
+            }
+          },
+          "required": [
+            "camera_id"
+          ]
+        }
+      },
+      "entrypoint": "upsert_camera_config"
+    },
+    {
+      "type": "function",
+      "category": "surveillance",
+      "function": {
+        "name": "delete_camera_config",
+        "description": "Delete one saved property camera config by camera_id.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "camera_id": {
+              "type": "string",
+              "description": "Camera ID to delete."
+            }
+          },
+          "required": [
+            "camera_id"
+          ]
+        }
+      },
+      "entrypoint": "delete_camera_config"
+    },
+    {
+      "type": "function",
+      "category": "surveillance",
+      "function": {
+        "name": "find_person",
+        "description": "Find and group people in property CCTV footage over a time range. Uses saved enabled camera configs by default, or accepts camera sources with camera_id, local_path/video_path, or rtsp_url, saves detected person crops, keeps same-day identities stable, and returns relative image paths for chat preview.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "camera_sources": {
+              "type": "array",
+              "description": "Camera source objects for the property footage.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "camera_id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "local_path": {
+                    "type": "string",
+                    "description": "Path to an exported local video, preferably relative to internal/."
+                  },
+                  "video_path": {
+                    "type": "string"
+                  },
+                  "rtsp_url": {
+                    "type": "string"
+                  },
+                  "playback_uri": {
+                    "type": "string"
+                  },
+                  "recording_source": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "start_time": {
+              "type": "string",
+              "description": "ISO 8601 investigation start time."
+            },
+            "end_time": {
+              "type": "string",
+              "description": "ISO 8601 investigation end time."
+            },
+            "output_dir": {
+              "type": "string",
+              "description": "Directory under internal/ for output media."
+            }
+          },
+          "required": [
+            "start_time",
+            "end_time"
+          ]
+        }
+      },
+      "entrypoint": "find_person"
+    }
+  ]
+}

@@ -1,0 +1,309 @@
+{
+  "name": "files",
+  "module": "tools.files.main",
+  "tools": [
+    {
+      "type": "function",
+      "category": "files",
+      "function": {
+        "name": "list_files",
+        "description": "List files and folders in internal/.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Directory path relative to the internal folder."
+            },
+            "recursive": {
+              "type": "boolean",
+              "description": "Whether to list nested files and folders."
+            }
+          },
+          "required": []
+        }
+      },
+      "entrypoint": "list_files"
+    },
+    {
+      "type": "function",
+      "category": "files",
+      "function": {
+        "name": "read_file",
+        "description": "Read a UTF-8 text file from internal/.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "File path relative to the internal folder."
+            }
+          },
+          "required": [
+            "path"
+          ]
+        }
+      },
+      "entrypoint": "read_file"
+    },
+    {
+      "type": "function",
+      "category": "files",
+      "function": {
+        "name": "write_file",
+        "description": "Create, save, or overwrite a UTF-8 text file in internal/.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "File path relative to the internal folder."
+            },
+            "content": {
+              "type": "string",
+              "description": "Text content to write."
+            },
+            "overwrite": {
+              "type": "boolean",
+              "description": "Whether to overwrite an existing file."
+            }
+          },
+          "required": [
+            "path",
+            "content"
+          ]
+        }
+      },
+      "entrypoint": "write_file"
+    },
+    {
+      "type": "function",
+      "category": "files",
+      "function": {
+        "name": "create_file",
+        "description": "Create, save, or overwrite a UTF-8 text file in internal/.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "File path relative to the internal folder."
+            },
+            "content": {
+              "type": "string",
+              "description": "Text content to write."
+            },
+            "overwrite": {
+              "type": "boolean",
+              "description": "Whether to overwrite an existing file."
+            }
+          },
+          "required": [
+            "path",
+            "content"
+          ]
+        }
+      },
+      "entrypoint": "write_file"
+    },
+    {
+      "type": "function",
+      "category": "files",
+      "function": {
+        "name": "append_file",
+        "description": "Append UTF-8 text to an existing or new file in internal/.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "File path relative to the internal folder."
+            },
+            "content": {
+              "type": "string",
+              "description": "Text content to append."
+            }
+          },
+          "required": [
+            "path",
+            "content"
+          ]
+        }
+      },
+      "entrypoint": "append_file"
+    },
+    {
+      "type": "function",
+      "category": "files",
+      "function": {
+        "name": "delete_file",
+        "description": "Delete a file from internal/.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "File path relative to the internal folder."
+            }
+          },
+          "required": [
+            "path"
+          ]
+        }
+      },
+      "entrypoint": "delete_file"
+    },
+    {
+      "type": "function",
+      "category": "files",
+      "function": {
+        "name": "create_directory",
+        "description": "Create a folder in internal/.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Directory path relative to the internal folder."
+            }
+          },
+          "required": [
+            "path"
+          ]
+        }
+      },
+      "entrypoint": "create_directory"
+    },
+    {
+      "type": "function",
+      "category": "files",
+      "function": {
+        "name": "delete_directory",
+        "description": "Delete an empty folder from internal/.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Directory path relative to the internal folder."
+            }
+          },
+          "required": [
+            "path"
+          ]
+        }
+      },
+      "entrypoint": "delete_directory"
+    },
+    {
+      "type": "function",
+      "category": "files",
+      "function": {
+        "name": "move_path",
+        "description": "Move or rename a file or folder in internal/.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source_path": {
+              "type": "string",
+              "description": "Source path relative to the internal folder."
+            },
+            "destination_path": {
+              "type": "string",
+              "description": "Destination path relative to the internal folder."
+            },
+            "overwrite": {
+              "type": "boolean",
+              "description": "Whether to overwrite the destination if it exists."
+            }
+          },
+          "required": [
+            "source_path",
+            "destination_path"
+          ]
+        }
+      },
+      "entrypoint": "move_path"
+    },
+    {
+      "type": "function",
+      "category": "files",
+      "function": {
+        "name": "copy_file",
+        "description": "Copy a file within internal/.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source_path": {
+              "type": "string",
+              "description": "Source file path relative to the internal folder."
+            },
+            "destination_path": {
+              "type": "string",
+              "description": "Destination file path relative to the internal folder."
+            },
+            "overwrite": {
+              "type": "boolean",
+              "description": "Whether to overwrite the destination if it exists."
+            }
+          },
+          "required": [
+            "source_path",
+            "destination_path"
+          ]
+        }
+      },
+      "entrypoint": "copy_file"
+    },
+    {
+      "type": "function",
+      "category": "files",
+      "function": {
+        "name": "get_file_info",
+        "description": "Get metadata for a file or folder in internal/.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Path relative to the internal folder."
+            }
+          },
+          "required": [
+            "path"
+          ]
+        }
+      },
+      "entrypoint": "get_file_info"
+    },
+    {
+      "type": "function",
+      "category": "files",
+      "function": {
+        "name": "search_files",
+        "description": "Search filenames and UTF-8 text contents in internal/.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Search query."
+            },
+            "path": {
+              "type": "string",
+              "description": "Directory path relative to the internal folder."
+            },
+            "max_results": {
+              "type": "integer",
+              "description": "Maximum number of results to return."
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      },
+      "entrypoint": "search_files"
+    }
+  ]
+}
