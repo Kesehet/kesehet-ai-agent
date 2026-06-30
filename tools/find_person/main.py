@@ -3,10 +3,11 @@ import logging
 import math
 import os
 import re
+import shutil
 import urllib3
 import urllib.parse
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,10 @@ MIN_DETECTION_CONFIDENCE = 0.35
 MIN_CROP_AREA = 1_800
 FRAME_SAMPLE_SECONDS = 2.0
 MAX_FRAMES_PER_SOURCE = 450
+MAX_CONTENT_FRAMES_PER_SOURCE = 120
+MAX_CONTENT_SAMPLES_PER_LABEL = 12
+DEFAULT_CONTENT_LOOKBACK_MINUTES = 5
+DEFAULT_CONTENT_RETENTION_DAYS = 2
 APPEARANCE_MATCH_THRESHOLD = 0.62
 TRACK_APPEARANCE_MATCH_THRESHOLD = 0.42
 IDENTITY_MATCH_THRESHOLD = 0.62
@@ -29,6 +34,19 @@ TRACK_TIME_WINDOW_SECONDS = 45.0
 TRACK_IOU_THRESHOLD = 0.02
 TRACK_CENTER_DISTANCE_THRESHOLD = 1.9
 SECRET_VALUE = "********"
+VEHICLE_LABELS = {"bicycle", "car", "motorcycle", "bus", "train", "truck", "boat"}
+ANIMAL_LABELS = {
+    "bird",
+    "cat",
+    "dog",
+    "horse",
+    "sheep",
+    "cow",
+    "elephant",
+    "bear",
+    "zebra",
+    "giraffe",
+}
 
 
 @dataclass(frozen=True)
@@ -248,10 +266,10 @@ def _relative_to_internal(path: Path) -> str:
     return path.resolve().relative_to(INTERNAL_ROOT.resolve()).as_posix()
 
 
-def _configure_logger(output_root: Path, day: str) -> logging.Logger:
+def _configure_logger(output_root: Path, day: str, tool_name: str = "find_person") -> logging.Logger:
     logs_dir = output_root / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("find_person")
+    logger = logging.getLogger(tool_name)
     logger.setLevel(logging.INFO)
     logger.propagate = False
     logger.handlers.clear()
@@ -261,7 +279,7 @@ def _configure_logger(output_root: Path, day: str) -> logging.Logger:
         datefmt="%Y-%m-%dT%H:%M:%S",
     )
     file_handler = logging.FileHandler(
-        logs_dir / f"{day}-find_person.log",
+        logs_dir / f"{day}-{tool_name}.log",
         encoding="utf-8",
     )
     file_handler.setFormatter(formatter)
@@ -399,6 +417,20 @@ def _vigi_nvr_replay_uri(
     )
 
 
+def _vigi_nvr_live_uri(camera: dict[str, Any]) -> tuple[str | None, str | None]:
+    host = camera.get("nvr_host")
+    channel = camera.get("nvr_channel")
+    if not host or channel is None:
+        return None, "No NVR host/channel was configured."
+
+    username = urllib.parse.quote(str(camera.get("nvr_username") or camera.get("username") or ""), safe="")
+    password = urllib.parse.quote(str(camera.get("nvr_password") or camera.get("password") or ""), safe="")
+    credentials = f"{username}:{password}@" if username else ""
+    port = int(camera.get("nvr_port") or 554)
+    stream = int(camera.get("nvr_stream") or 1)
+    return f"rtsp://{credentials}{host}:{port}/live/{int(channel)}/{stream}/avm", None
+
+
 def _source_uri(
     camera: dict[str, Any],
     start_time: datetime,
@@ -420,6 +452,8 @@ def _source_uri(
     recording_source = str(camera.get("recording_source", "")).lower()
     if _is_historical_request(end_time) and (recording_source == "vigi_nvr" or camera.get("nvr_host")):
         return _vigi_nvr_replay_uri(camera, start_time, end_time)
+    if recording_source == "vigi_nvr" or camera.get("nvr_host"):
+        return _vigi_nvr_live_uri(camera)
 
     if recording_source == "onvif" or camera.get("onvif_port"):
         replay_uri, warning = _onvif_replay_uri(camera, logger)
@@ -486,6 +520,96 @@ def _detect_people(model: Any, frame: Any) -> list[tuple[float, list[int]]]:
                 continue
             detections.append((confidence, [x1, y1, x2, y2]))
     return detections
+
+
+def _model_class_names(model: Any) -> dict[int, str]:
+    names = getattr(model, "names", {}) or {}
+    if isinstance(names, dict):
+        return {int(index): str(name) for index, name in names.items()}
+    if isinstance(names, list):
+        return {index: str(name) for index, name in enumerate(names)}
+    return {}
+
+
+def _normalize_labels(labels: list[str] | None) -> set[str] | None:
+    if not labels:
+        return None
+    normalized = {str(label).strip().lower().replace("_", " ") for label in labels if str(label).strip()}
+    return normalized or None
+
+
+def _content_category(label: str) -> str:
+    if label == "person":
+        return "people"
+    if label in VEHICLE_LABELS:
+        return "vehicles"
+    if label in ANIMAL_LABELS:
+        return "animals"
+    return "objects"
+
+
+def _detect_content(
+    model: Any,
+    frame: Any,
+    labels: set[str] | None = None,
+) -> list[tuple[str, str, float, list[int]]]:
+    device = getattr(model, "_find_person_device", "cpu")
+    results = model.predict(frame, device=device, verbose=False)
+    class_names = _model_class_names(model)
+    detections: list[tuple[str, str, float, list[int]]] = []
+    for result in results:
+        boxes = getattr(result, "boxes", None)
+        if boxes is None:
+            continue
+        for box in boxes:
+            confidence = float(box.conf[0])
+            if confidence < MIN_DETECTION_CONFIDENCE:
+                continue
+            class_id = int(box.cls[0])
+            label = class_names.get(class_id, str(class_id)).lower()
+            if labels is not None and label not in labels:
+                continue
+            x1, y1, x2, y2 = [int(round(value)) for value in box.xyxy[0].tolist()]
+            if (x2 - x1) * (y2 - y1) < MIN_CROP_AREA:
+                continue
+            detections.append((_content_category(label), label, confidence, [x1, y1, x2, y2]))
+    return detections
+
+
+def _extract_text(cv2: Any, frame: Any) -> list[dict[str, Any]]:
+    try:
+        import pytesseract  # type: ignore
+    except ImportError:
+        return []
+
+    try:
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        data = pytesseract.image_to_data(rgb, output_type=pytesseract.Output.DICT)
+    except Exception:
+        return []
+
+    texts: list[dict[str, Any]] = []
+    count = len(data.get("text", []))
+    for index in range(count):
+        text = str(data["text"][index]).strip()
+        if len(text) < 3:
+            continue
+        try:
+            confidence = float(data["conf"][index])
+        except (TypeError, ValueError):
+            confidence = -1.0
+        if confidence < 35:
+            continue
+        x = int(data["left"][index])
+        y = int(data["top"][index])
+        w = int(data["width"][index])
+        h = int(data["height"][index])
+        texts.append({
+            "text": text,
+            "confidence": round(confidence / 100.0, 3),
+            "bbox": [x, y, x + w, y + h],
+        })
+    return texts[:40]
 
 
 def _crop_quality(cv2: Any, np: Any, crop: Any) -> float:
@@ -848,6 +972,334 @@ def _process_camera(
     capture.release()
     logger.info("%s: processed=%s observations=%s", camera_id, processed, len(observations))
     return observations, warnings
+
+
+def _cleanup_camera_content(output_root: Path, retention_days: int, logger: logging.Logger) -> dict[str, int]:
+    retention_days = max(1, int(retention_days))
+    cutoff = datetime.now(timezone.utc).date() - timedelta(days=retention_days)
+    removed_dirs = 0
+    removed_logs = 0
+    removed_memories = 0
+
+    for path in output_root.iterdir() if output_root.exists() else []:
+        if not path.is_dir():
+            continue
+        try:
+            day = datetime.fromisoformat(path.name).date()
+        except ValueError:
+            continue
+        if day < cutoff:
+            shutil.rmtree(path, ignore_errors=True)
+            removed_dirs += 1
+
+    logs_dir = output_root / "logs"
+    if logs_dir.exists():
+        for path in logs_dir.glob("*-camera_content.log"):
+            day_text = path.name.split("-camera_content.log", 1)[0]
+            try:
+                day = datetime.fromisoformat(day_text).date()
+            except ValueError:
+                continue
+            if day < cutoff:
+                path.unlink(missing_ok=True)
+                removed_logs += 1
+
+    try:
+        from core.db import connect, init_db
+
+        init_db()
+        with connect() as db:
+            result = db.execute(
+                """
+                DELETE FROM memories
+                WHERE tags LIKE ? AND updated_at < ?
+                """,
+                (
+                    "%camera_content%",
+                    datetime.combine(cutoff, datetime.min.time(), timezone.utc).isoformat(),
+                ),
+            )
+            removed_memories = int(result.rowcount or 0)
+    except Exception as exc:
+        logger.warning("camera content memory cleanup failed: %s", exc)
+
+    return {
+        "removed_output_dirs": removed_dirs,
+        "removed_logs": removed_logs,
+        "removed_memories": removed_memories,
+        "retention_days": retention_days,
+    }
+
+
+def _save_content_memory(summary: dict[str, Any], start_time: str, end_time: str) -> dict[str, Any] | None:
+    try:
+        from tools.memory.main import remember
+    except Exception:
+        return None
+
+    counts = summary.get("counts", {})
+    cameras = summary.get("cameras", [])
+    lines = [
+        f"Camera content scan from {start_time} to {end_time}.",
+        f"Cameras scanned: {', '.join(cameras) if cameras else 'none'}.",
+        "Counts: " + json.dumps(counts, ensure_ascii=False, sort_keys=True),
+    ]
+    if summary.get("texts"):
+        lines.append("Texts: " + "; ".join(str(item.get("text")) for item in summary["texts"][:20]))
+    if summary.get("top_observations"):
+        rendered = []
+        for item in summary["top_observations"][:20]:
+            rendered.append(
+                f"{item.get('label')} at {item.get('camera_id')} "
+                f"{item.get('timestamp')} ({item.get('confidence')})"
+            )
+        lines.append("Top observations: " + "; ".join(rendered))
+
+    try:
+        return remember(
+            title=f"Camera content {start_time[:10]}",
+            content="\n".join(lines),
+            tags=["camera_content", "surveillance", "auto_generated"],
+        )
+    except Exception:
+        return None
+
+
+def _process_camera_content(
+    camera: dict[str, Any],
+    start_time: datetime,
+    end_time: datetime,
+    day_dir: Path,
+    output_root: Path,
+    model: Any,
+    cv2: Any,
+    np: Any,
+    logger: logging.Logger,
+    labels: set[str] | None,
+    include_text: bool,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    camera_id = _safe_name(str(camera.get("camera_id") or camera.get("name") or "camera"))
+    camera_name = str(camera.get("name") or camera_id)
+    warnings: list[dict[str, Any]] = []
+    observations: list[dict[str, Any]] = []
+    texts: list[dict[str, Any]] = []
+    source, warning = _source_uri(camera, start_time, end_time, logger)
+    if warning:
+        warnings.append({"camera_id": camera_id, "camera_name": camera_name, "warning": warning})
+        logger.warning("%s: %s", camera_id, warning)
+        return observations, texts, warnings
+    if source is None:
+        return observations, texts, warnings
+
+    os.environ.setdefault(
+        "OPENCV_FFMPEG_CAPTURE_OPTIONS",
+        "rtsp_transport;tcp|stimeout;5000000|rw_timeout;5000000",
+    )
+    capture = cv2.VideoCapture(source)
+    if not capture.isOpened():
+        message = f"Unable to open recording source: {_redact_secret(source)}"
+        warnings.append({"camera_id": camera_id, "camera_name": camera_name, "warning": message})
+        logger.warning("%s: %s", camera_id, message)
+        return observations, texts, warnings
+
+    fps = float(capture.get(cv2.CAP_PROP_FPS) or 0) or 25.0
+    step = max(1, int(round(fps * FRAME_SAMPLE_SECONDS)))
+    frame_index = 0
+    processed = 0
+    label_counts: dict[str, int] = {}
+    camera_dir = day_dir / "_content_samples" / camera_id
+    camera_dir.mkdir(parents=True, exist_ok=True)
+    logger.info("%s: content processing source=%s fps=%.2f", camera_id, _redact_secret(source), fps)
+
+    while processed < MAX_CONTENT_FRAMES_PER_SOURCE:
+        ok = capture.grab()
+        if not ok:
+            break
+        if frame_index % step != 0:
+            frame_index += 1
+            continue
+
+        ok, frame = capture.retrieve()
+        frame_index += 1
+        if not ok or frame is None:
+            continue
+
+        timestamp = _frame_timestamp(start_time, frame_index, fps)
+        if _parse_time(timestamp) > end_time:
+            break
+
+        processed += 1
+        try:
+            detections = _detect_content(model, frame, labels)
+        except Exception as exc:
+            logger.exception("%s: content detection failed: %s", camera_id, exc)
+            continue
+
+        if include_text:
+            for text_item in _extract_text(cv2, frame):
+                text_item.update({
+                    "camera_id": camera_id,
+                    "camera_name": camera_name,
+                    "timestamp": timestamp,
+                })
+                texts.append(text_item)
+
+        for category, label, detection_confidence, bbox in detections:
+            label_counts[label] = label_counts.get(label, 0) + 1
+            if label_counts[label] > MAX_CONTENT_SAMPLES_PER_LABEL:
+                continue
+            x1, y1, x2, y2 = bbox
+            h, w = frame.shape[:2]
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(w, x2), min(h, y2)
+            crop = frame[y1:y2, x1:x2]
+            quality = _crop_quality(cv2, np, crop)
+            if quality < 0.2:
+                continue
+
+            safe_time = timestamp.replace(":", "-").replace("+", "_").replace(".", "_")
+            file_name = f"{camera_id}_{_safe_name(label)}_{safe_time}_{label_counts[label]}.jpg"
+            crop_path = camera_dir / file_name
+            cv2.imwrite(str(crop_path), crop)
+            observations.append({
+                "category": category,
+                "label": label,
+                "camera_id": camera_id,
+                "camera_name": camera_name,
+                "timestamp": timestamp,
+                "confidence": round(float(detection_confidence), 3),
+                "bbox": [x1, y1, x2, y2],
+                "path": _relative_to_internal(crop_path),
+                "media_type": "image",
+            })
+
+    capture.release()
+    logger.info("%s: content processed=%s observations=%s texts=%s", camera_id, processed, len(observations), len(texts))
+    return observations, texts, warnings
+
+
+def inspect_camera_content(
+    camera_sources: list[dict[str, Any]] | None = None,
+    start_time: str = "",
+    end_time: str = "",
+    lookback_minutes: int = DEFAULT_CONTENT_LOOKBACK_MINUTES,
+    labels: list[str] | None = None,
+    include_text: bool = True,
+    save_memory: bool = True,
+    retention_days: int = DEFAULT_CONTENT_RETENTION_DAYS,
+    output_dir: str = DEFAULT_OUTPUT_DIR,
+) -> dict[str, Any]:
+    """
+    Inspect camera footage for broad content such as people, vehicles, animals,
+    objects, and OCR-readable text. Designed for recurring scheduler runs.
+    """
+    if bool(start_time) != bool(end_time):
+        raise ValueError("Provide both start_time and end_time, or neither.")
+    if start_time and end_time:
+        parsed_start = _parse_time(start_time)
+        parsed_end = _parse_time(end_time)
+    else:
+        parsed_start = datetime.now(timezone.utc)
+        parsed_end = parsed_start + timedelta(minutes=max(1, int(lookback_minutes)))
+        start_time = parsed_start.isoformat()
+        end_time = parsed_end.isoformat()
+
+    if parsed_end <= parsed_start:
+        raise ValueError("end_time must be after start_time.")
+    if camera_sources is not None and not isinstance(camera_sources, list):
+        raise ValueError("camera_sources must be a list of camera objects.")
+    camera_sources = _expand_camera_sources(camera_sources)
+    if not camera_sources:
+        raise ValueError("No enabled camera configs or camera_sources were provided.")
+
+    day = parsed_start.date().isoformat()
+    output_root = _resolve_internal_dir(output_dir)
+    day_dir = output_root / day
+    day_dir.mkdir(parents=True, exist_ok=True)
+    logger = _configure_logger(output_root, day, "camera_content")
+    logger.info("inspect_camera_content started cameras=%s start=%s end=%s", len(camera_sources), start_time, end_time)
+    cleanup = _cleanup_camera_content(output_root, retention_days, logger)
+
+    warnings: list[dict[str, Any]] = []
+    try:
+        cv2, np = _load_optional_cv()
+    except RuntimeError as exc:
+        logger.error(str(exc))
+        return {
+            "observations": [],
+            "texts": [],
+            "summary": {"counts": {}, "cameras": []},
+            "warnings": [{"warning": str(exc)}],
+            "cleanup": cleanup,
+            "output_dir": output_dir,
+            "log_path": _relative_to_internal(output_root / "logs" / f"{day}-camera_content.log"),
+        }
+
+    model = _load_yolo_model(logger)
+    if model is None:
+        message = "Content detection model is unavailable. Install ultralytics to enable YOLO detection."
+        logger.error(message)
+        return {
+            "observations": [],
+            "texts": [],
+            "summary": {"counts": {}, "cameras": []},
+            "warnings": [{"warning": message}],
+            "cleanup": cleanup,
+            "output_dir": output_dir,
+            "log_path": _relative_to_internal(output_root / "logs" / f"{day}-camera_content.log"),
+        }
+
+    observations: list[dict[str, Any]] = []
+    texts: list[dict[str, Any]] = []
+    normalized_labels = _normalize_labels(labels)
+    for camera in camera_sources:
+        try:
+            camera_observations, camera_texts, camera_warnings = _process_camera_content(
+                camera,
+                parsed_start,
+                parsed_end,
+                day_dir,
+                output_root,
+                model,
+                cv2,
+                np,
+                logger,
+                normalized_labels,
+                include_text,
+            )
+            observations.extend(camera_observations)
+            texts.extend(camera_texts)
+            warnings.extend(camera_warnings)
+        except Exception as exc:
+            camera_id = _safe_name(str(camera.get("camera_id") or camera.get("name") or "camera"))
+            logger.exception("%s: camera content processing failed: %s", camera_id, exc)
+            warnings.append({"camera_id": camera_id, "warning": str(exc)})
+
+    counts: dict[str, dict[str, int]] = {}
+    for observation in observations:
+        category = str(observation["category"])
+        label = str(observation["label"])
+        counts.setdefault(category, {})
+        counts[category][label] = counts[category].get(label, 0) + 1
+
+    summary = {
+        "counts": counts,
+        "cameras": sorted({str(item["camera_id"]) for item in observations} | {str(item["camera_id"]) for item in texts}),
+        "top_observations": sorted(observations, key=lambda item: item["confidence"], reverse=True)[:20],
+        "texts": texts[:40],
+    }
+    memory = _save_content_memory(summary, start_time, end_time) if save_memory else None
+    logger.info("inspect_camera_content completed observations=%s texts=%s warnings=%s", len(observations), len(texts), len(warnings))
+    return {
+        "observations": observations,
+        "texts": texts,
+        "summary": summary,
+        "memory": memory,
+        "warnings": warnings,
+        "cleanup": cleanup,
+        "output_dir": output_dir,
+        "log_path": _relative_to_internal(output_root / "logs" / f"{day}-camera_content.log"),
+    }
 
 
 def find_person(

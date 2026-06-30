@@ -5,3 +5,4 @@
 /docs
 /internal
 /__pycache__
+*.pyc

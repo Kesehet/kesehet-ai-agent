@@ -6,6 +6,7 @@ __all__ = [
     "delete_camera_config",
     "find_person",
     "get_camera_config",
+    "inspect_camera_content",
     "list_camera_configs",
     "upsert_camera_config",
 ]

@@ -164,6 +164,87 @@
       "type": "function",
       "category": "surveillance",
       "function": {
+        "name": "inspect_camera_content",
+        "description": "Inspect property CCTV footage for broad content such as people, vehicles, animals, objects, and OCR-readable text. Designed for scheduled runs: when no time range is supplied it scans the recent lookback window, saves useful crops, stores a durable camera_content memory summary, and deletes old generated camera content after the retention_days window.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "camera_sources": {
+              "type": "array",
+              "description": "Camera source objects for the property footage. Defaults to enabled saved camera configs.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "camera_id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "local_path": {
+                    "type": "string",
+                    "description": "Path to an exported local video, preferably relative to internal/."
+                  },
+                  "video_path": {
+                    "type": "string"
+                  },
+                  "rtsp_url": {
+                    "type": "string"
+                  },
+                  "playback_uri": {
+                    "type": "string"
+                  },
+                  "recording_source": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "start_time": {
+              "type": "string",
+              "description": "Optional ISO 8601 investigation start time. If omitted, lookback_minutes is used."
+            },
+            "end_time": {
+              "type": "string",
+              "description": "Optional ISO 8601 investigation end time. If omitted, current UTC time is used."
+            },
+            "lookback_minutes": {
+              "type": "integer",
+              "description": "Recent minutes to scan when start_time/end_time are omitted. Default is 5."
+            },
+            "labels": {
+              "type": "array",
+              "description": "Optional YOLO label filter such as person, car, truck, dog, cat, backpack, bottle, or cell phone. Omit to inspect all labels.",
+              "items": {
+                "type": "string"
+              }
+            },
+            "include_text": {
+              "type": "boolean",
+              "description": "Whether to try OCR text extraction when pytesseract is installed."
+            },
+            "save_memory": {
+              "type": "boolean",
+              "description": "Whether to save a durable summary memory for later AI answers."
+            },
+            "retention_days": {
+              "type": "integer",
+              "description": "Delete generated camera content and camera_content memories older than this many days. Default is 2."
+            },
+            "output_dir": {
+              "type": "string",
+              "description": "Directory under internal/ for output media."
+            }
+          },
+          "required": []
+        }
+      },
+      "entrypoint": "inspect_camera_content"
+    },
+    {
+      "type": "function",
+      "category": "surveillance",
+      "function": {
         "name": "find_person",
         "description": "Find and group people in property CCTV footage over a time range. Uses saved enabled camera configs by default, or accepts camera sources with camera_id, local_path/video_path, or rtsp_url, saves detected person crops, keeps same-day identities stable, and returns relative image paths for chat preview.",
         "parameters": {

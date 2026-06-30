@@ -71,6 +71,7 @@ def select_tools_for_prompt(
         - If the user asks to create, diagnose, fix, rebuild, or repair AI tools, include the matching tool_development tool.
         - If the user asks to add, update, list, view, or delete CCTV/property camera settings, include the matching camera config tool.
         - If the user asks to find or track people in property camera footage, include find_person.
+        - If the user asks what cameras saw, or asks about vehicles, animals, objects, plates, text, or general CCTV content, include inspect_camera_content.
         - If the user asks you to remember, recall, store knowledge, or use persistent memory, include memory tools.
         - If the user asks to schedule, list, update, or delete future tool runs, include scheduler tools.
 
@@ -501,7 +502,7 @@ def _memory_context(prompt: str, limit: int = 5) -> str:
     if not memories:
         return ""
 
-    lines = ["Relevant durable memories from SQLite:"]
+    lines = ["Relevant durable memories:"]
     for memory in memories:
         tags = ", ".join(memory.get("tags") or [])
         suffix = f" [{tags}]" if tags else ""
